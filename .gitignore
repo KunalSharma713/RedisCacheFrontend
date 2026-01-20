@@ -103,7 +103,6 @@ pids
 *.pid.lock
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -130,3 +129,7 @@ Thumbs.db
 # Misc
 *.tgz
 *.tar.gz
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore

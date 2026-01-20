@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
+import "./ProductTable.css";
 import axios from "axios";
+import EditProductForm from "./EditProductForm";
 
 const ProductTable = () => {
   const [products, setProducts] = useState([]);
@@ -9,11 +11,14 @@ const ProductTable = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("name");
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const rowsPerPage = 15;
 
-  const fetchProducts = async (page = 1, search = "", sort = "name", order = "asc") => {
+  const fetchProducts = async (page = 1, search = "", sort = "createdAt", order = "desc") => {
     setLoading(true);
     setError(null);
     
@@ -63,6 +68,42 @@ const ProductTable = () => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
     }
+  };
+
+  const handleEdit = (product) => {
+    setEditingProduct(product._id);
+  };
+
+  const handleCloseEdit = () => {
+    setEditingProduct(null);
+  };
+
+  const handleProductUpdated = () => {
+    fetchProducts(currentPage, searchTerm, sortBy, sortOrder);
+  };
+
+  const handleDelete = (product) => {
+    setDeleteConfirm(product);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    
+    setActionLoading(true);
+    try {
+      await axios.delete(`${process.env.REACT_APP_API_URL}/api/products/${deleteConfirm._id}`);
+      setDeleteConfirm(null);
+      fetchProducts(currentPage, searchTerm, sortBy, sortOrder);
+    } catch (err) {
+      setError("Failed to delete product. Please try again.");
+      console.error("Error deleting product:", err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirm(null);
   };
 
   const getSortIcon = (field) => {
@@ -190,16 +231,14 @@ const ProductTable = () => {
                 Price {getSortIcon("price")}
               </th>
               <th>Category</th>
-              <th>Tax Included</th>
-              <th>Name Length</th>
-              <th>Computed Score</th>
-              <th>Category Avg</th>
+              <th>Created At</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" className="loading-cell">
+                <td colSpan="5" className="loading-cell">
                   <div className="table-loading">
                     <div className="spinner"></div>
                     <span>Loading...</span>
@@ -208,7 +247,7 @@ const ProductTable = () => {
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan="7" className="no-data-cell">
+                <td colSpan="5" className="no-data-cell">
                   <div className="no-data">
                     <div className="no-data-icon">📭</div>
                     <h4>No products found</h4>
@@ -226,29 +265,30 @@ const ProductTable = () => {
                     <div className="price">${product.price.toFixed(2)}</div>
                   </td>
                   <td className="category-cell">
-                    {product.categoryInfo && (
-                      <span className="category-badge">
-                        {product.categoryInfo.category}
-                      </span>
-                    )}
+                    <span className="category-badge">
+                      {product.category}
+                    </span>
                   </td>
-                  <td className="tax-cell">
-                    {product.priceWithTax && (
-                      <span className="tax-amount">
-                        ${product.priceWithTax.toFixed(2)}
-                      </span>
-                    )}
+                  <td className="created-cell">
+                    {product.createdAt ? new Date(product.createdAt).toLocaleString() : '-'}
                   </td>
-                  <td className="length-cell">
-                    {product.nameLength || 0}
-                  </td>
-                  <td className="score-cell">
-                    {product.computedField ? product.computedField.toFixed(2) : '-'}
-                  </td>
-                  <td className="avg-cell">
-                    {product.categoryInfo?.avgPrice ? 
-                      `$${product.categoryInfo.avgPrice.toFixed(2)}` : '-'
-                    }
+                  <td className="actions-cell">
+                    <div className="action-buttons">
+                      <button
+                        onClick={() => handleEdit(product)}
+                        className="edit-button"
+                        title="Edit product"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product)}
+                        className="delete-button"
+                        title="Delete product"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -266,6 +306,60 @@ const ProductTable = () => {
             </span>
           </div>
           {renderPagination()}
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {editingProduct && (
+        <EditProductForm
+          productId={editingProduct}
+          onClose={handleCloseEdit}
+          onProductUpdated={handleProductUpdated}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="delete-confirm-overlay">
+          <div className="delete-confirm-container">
+            <div className="delete-confirm-header">
+              <h3>Confirm Delete</h3>
+              <button className="close-button" onClick={cancelDelete}>×</button>
+            </div>
+            
+            <div className="delete-confirm-content">
+              <p>Are you sure you want to delete this product?</p>
+              <div className="product-preview">
+                <strong>{deleteConfirm.name}</strong>
+                <br />
+                Price: ${deleteConfirm.price.toFixed(2)} | Category: {deleteConfirm.category}
+              </div>
+            </div>
+
+            <div className="delete-confirm-actions">
+              <button
+                onClick={cancelDelete}
+                className="cancel-delete-button"
+                disabled={actionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="confirm-delete-button"
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <>
+                    <span className="spinner"></span>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete Product'
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
